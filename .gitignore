@@ -1,3 +1,6 @@
+# Configuración local de Jelou Functions (generada por jelou functions init)
+jelou.json
+
 # Secretos y variables de entorno
 .env
 .env.*

@@ -22,10 +22,18 @@ jobs:
       - name: Install Jelou CLI
         run: npm install -g @jelou/cli@1.75.0
 
-      - name: Authenticate
-        run: jelou login --token "$JELOU_TOKEN" --profile ci --skip-skills
+      # jelou.json is gitignored (it contains a user-specific function ID).
+      # We generate it from the template, then create or link the function
+      # in the authenticated Company before deploying.
+      - name: Initialize function
+        run: |
+          cp jelou.example.json jelou.json
+          jelou functions init --slug github-demo --mode create --no-input 2>/dev/null || \
+          jelou functions init --slug github-demo --mode link --no-input
         env:
           JELOU_TOKEN: ${{ secrets.JELOU_TOKEN }}
 
       - name: Deploy
         run: jelou functions deploy --no-confirm --json
+        env:
+          JELOU_TOKEN: ${{ secrets.JELOU_TOKEN }}
