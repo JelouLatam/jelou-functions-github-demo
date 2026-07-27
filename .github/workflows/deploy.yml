@@ -1,9 +1,6 @@
 name: Deploy to Jelou Functions
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -25,11 +22,12 @@ jobs:
       # jelou.json is gitignored (it contains a user-specific function ID).
       # We generate it from the template, then create or link the function
       # in the authenticated Company before deploying.
+      # --force is required because cp already created jelou.json from the template.
       - name: Initialize function
         run: |
           cp jelou.example.json jelou.json
-          jelou functions init --slug github-demo --mode create --no-input 2>/dev/null || \
-          jelou functions init --slug github-demo --mode link --no-input
+          jelou functions init --slug github-demo --mode create --no-input --force 2>/dev/null || \
+          jelou functions init --slug github-demo --mode link --no-input --force
         env:
           JELOU_TOKEN: ${{ secrets.JELOU_TOKEN }}
 

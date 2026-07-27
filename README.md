@@ -13,7 +13,7 @@ Este repo muestra el flujo completo de desarrollo de una Jelou Function:
 
 La función en sí es intencionalmente simple: recibe un `orderId` y devuelve un estado simulado de orden. No consume APIs externas ni secretos.
 
-> **Este repositorio es una plantilla.** Cualquier developer puede clonarlo, inicializar su propia Function en su propia Company, y desplegarlo de forma independiente. Ver [Configuración inicial](#configuración-inicial).
+> **Este repositorio es una plantilla.** No existe un deploy oficial — cada developer hace fork, conecta su propia cuenta de Jelou y despliega en su propia Company. Ver [Uso como plantilla](#uso-como-plantilla).
 
 ## Arquitectura
 
@@ -46,32 +46,41 @@ npm install -g @jelou/cli
 jelou login
 ```
 
-## Configuración inicial
+## Uso como plantilla
 
-Este repositorio no incluye `jelou.json` porque ese archivo contiene el ID de una Function específica de una Company — es personal, como una variable de entorno. Cada developer genera el suyo.
+Este repositorio no tiene un deploy oficial ni está ligado a ninguna Company de Jelou. Es una plantilla: cada developer la usa en su propia cuenta.
 
-### 1. Clona el repositorio
+### Flujo recomendado
+
+**1. Haz fork del repositorio en GitHub**
+
+Usa el botón **Fork** en GitHub. Esto crea tu propia copia del repo donde podrás configurar tus secrets y ejecutar los workflows.
+
+**2. Clona tu fork**
 
 ```bash
-git clone https://github.com/JelouLatam/jelou-functions-github-demo
+git clone https://github.com/<tu-usuario>/jelou-functions-github-demo
 cd jelou-functions-github-demo
 ```
 
-### 2. Autentícate con tu cuenta de Jelou
+**3. Instala el CLI y autentícate**
 
 ```bash
+npm install -g @jelou/cli
 jelou login
 ```
 
-### 3. Inicializa tu propia Function
+El CLI te pedirá tu token de acceso personal. Consulta la [documentación oficial de Jelou Functions](https://docs.jelou.ai/guides/functions/autenticacion) para saber cómo obtenerlo según tu tipo de cuenta.
 
-Esto crea la Function en tu Company y genera tu `jelou.json` local (no se commitea):
+**4. Inicializa tu propia Function**
+
+Crea la Function en tu Company y genera tu `jelou.json` local (gitignoreado — no se commitea):
 
 ```bash
 jelou functions init --slug github-demo --mode create
 ```
 
-Si ya tienes una Function con ese slug en tu Company, usa `--mode link`:
+Si ya tienes una Function con ese slug en tu Company:
 
 ```bash
 jelou functions init --slug github-demo --mode link
@@ -159,20 +168,26 @@ Para desplegar a producción:
 jelou functions deploy
 ```
 
-## Despliegue automático con GitHub Actions
+## Despliegue con GitHub Actions
 
-El workflow en `.github/workflows/deploy.yml` se ejecuta en cada push a `main` y en ejecuciones manuales desde la pestaña Actions.
+El workflow en `.github/workflows/deploy.yml` se ejecuta **únicamente de forma manual** desde la pestaña Actions de tu fork (`Run workflow`). No hay trigger automático por push.
 
-### Configuración (una sola vez)
+### Configuración (una sola vez, en tu fork)
 
-1. Obtén tu PAT de Jelou (`jfn_pat_...`) desde el dashboard de Jelou.
-2. En tu repositorio (o fork), ve a:
+1. Obtén tu token de acceso personal de Jelou (`jfn_pat_...`). Consulta la [documentación oficial](https://docs.jelou.ai/guides/functions/autenticacion) — el proceso varía según el tipo de cuenta.
+2. En tu fork en GitHub, ve a:
    `Settings → Secrets and variables → Actions → New repository secret`
 3. Crea el secret:
    - **Name:** `JELOU_TOKEN`
-   - **Value:** tu PAT de Jelou
+   - **Value:** tu token de Jelou
 
-El workflow crea o enlaza automáticamente la Function en la Company asociada a tu token, y luego despliega.
+### Cómo ejecutar el workflow
+
+1. Ve a la pestaña **Actions** de tu fork.
+2. Selecciona **Deploy to Jelou Functions**.
+3. Haz clic en **Run workflow → Run workflow**.
+
+El workflow copia la plantilla, crea o enlaza la Function en la Company asociada a tu token, y despliega.
 
 ## Estructura del proyecto
 
