@@ -154,7 +154,7 @@ Respuesta esperada (`400 Bad Request`):
 
 ## Despliegue manual
 
-> Requiere haber completado la [Configuración inicial](#configuración-inicial).
+> Requiere haber completado el [Uso como plantilla](#uso-como-plantilla).
 
 Para previsualizar qué se subiría sin hacer el deploy:
 
