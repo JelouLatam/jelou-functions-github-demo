@@ -1,0 +1,37 @@
+name: Deploy to Jelou Functions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Jelou CLI
+        run: npm install -g @jelou/cli@1.75.0
+
+      # jelou.json is gitignored (it contains a user-specific function ID).
+      # We generate it from the template, then create or link the function
+      # in the authenticated Company before deploying.
+      # --force is required because cp already created jelou.json from the template.
+      - name: Initialize function
+        run: |
+          cp jelou.example.json jelou.json
+          jelou functions init --slug github-demo --mode create --no-input --force 2>/dev/null || \
+          jelou functions init --slug github-demo --mode link --no-input --force
+        env:
+          JELOU_TOKEN: ${{ secrets.JELOU_TOKEN }}
+
+      - name: Deploy
+        run: jelou functions deploy --no-confirm --json
+        env:
+          JELOU_TOKEN: ${{ secrets.JELOU_TOKEN }}
