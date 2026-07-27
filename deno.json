@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@jelou/functions": "jsr:@jelou/functions@0.7.3"
+  }
+}

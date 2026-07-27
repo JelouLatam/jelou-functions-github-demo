@@ -1,0 +1,23 @@
+# Secretos y variables de entorno
+.env
+.env.*
+
+# Datos internos de Jelou CLI
+.jelou/
+
+# Caché de Deno
+.deno/
+
+# Dependencias de Node (si se instalan herramientas locales)
+node_modules/
+
+# Artefactos de despliegue
+*.tar.gz
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Herramientas de desarrollo local
+.impeccable/
+.claude/

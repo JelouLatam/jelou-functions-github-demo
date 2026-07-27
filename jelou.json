@@ -1,0 +1,6 @@
+{
+  "$schema": "https://jelou.ai/schemas/jelou.json",
+  "function": "github-demo",
+  "id": "func_01kyj6kzade0ha8j1hydbsdkm4",
+  "entrypoint": "index.ts"
+}
