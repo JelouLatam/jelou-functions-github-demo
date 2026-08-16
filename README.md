@@ -1,60 +1,59 @@
 # jelou-functions-github-demo
 
-Demostración mínima de una **Jelou Function** desplegable desde GitHub.
+Demostración de una **Jelou Function** cuyo código vive en GitHub y se publica con un clic (**Run workflow**).
 
-## ¿Qué demuestra este repositorio?
+La Function aplica una **política de elegibilidad de microcrédito**: recibe monto, antigüedad, si ya hay un crédito y días de mora, y responde `approved` o `rejected`. No es un buró ni un motor de riesgo. Es la regla de negocio, fuera de la cabeza del AI Agent.
 
-Este repo muestra el flujo completo de desarrollo de una Jelou Function:
+El AI Agent conversa y junta los datos. Esta Function decide. Si Riesgo cambia un umbral, se edita una constante, se publica, y el bot ya usa la política nueva.
+
+> **Este repositorio es una plantilla.** No existe un deploy oficial. Cada developer hace fork, conecta su propia cuenta de Jelou y despliega en su propia Company.
+
+## Qué demuestra
 
 - Cómo estructurar el código con `define()` y validación Zod.
-- Cómo correr y probar la función localmente.
-- Cómo desplegarla manualmente con el CLI de Jelou.
-- Cómo automatizar el despliegue desde GitHub Actions con un solo secret.
+- Cómo probar en local con `curl`.
+- Cómo desplegar con Jelou CLI o desde GitHub Actions (`workflow_dispatch`).
+- El wow: cambias `MAX_AMOUNT`, das **Run workflow**, y el mismo payload cambia de `rejected` a `approved`.
 
-La función en sí es intencionalmente simple: recibe un `orderId` y devuelve un estado simulado de orden. No consume APIs externas ni secretos.
-
-> **Este repositorio es una plantilla.** No existe un deploy oficial — cada developer hace fork, conecta su propia cuenta de Jelou y despliega en su propia Company. Ver [Uso como plantilla](#uso-como-plantilla).
+No consume APIs externas ni secretos.
 
 ## Arquitectura
 
 ```
 GitHub (este repo)
-   └── almacena el código fuente
+   └── código de la política
           │
           ▼
-   jelou functions deploy
+   Run workflow  →  jelou functions deploy
           │
           ▼
-Jelou Functions (Deno Subhosting)
-   └── expone el endpoint HTTP + herramienta MCP
+Jelou Functions
+   └── HTTP + herramienta MCP para el AI Agent
 ```
 
-GitHub es el repositorio del código. Jelou Functions es quien lo ejecuta en producción.
+GitHub versiona la regla. Jelou la ejecuta.
 
 ## Requisitos
 
-- [Node.js](https://nodejs.org/) 18+ (para instalar el CLI de Jelou)
+- [Node.js](https://nodejs.org/) 18+
 - CLI de Jelou:
 
 ```bash
 npm install -g @jelou/cli
 ```
 
-- Autenticación activa:
+- Autenticación:
 
 ```bash
 jelou login
+jelou whoami
 ```
+
+Crea la API key del CLI en [apps.jelou.ai/settings/api-keys](https://apps.jelou.ai/settings/api-keys). Detalle en la [autenticación del CLI](https://docs.jelou.ai/guides/cli/autenticacion).
 
 ## Uso como plantilla
 
-Este repositorio no tiene un deploy oficial ni está ligado a ninguna Company de Jelou. Es una plantilla: cada developer la usa en su propia cuenta.
-
-### Flujo recomendado
-
-**1. Haz fork del repositorio en GitHub**
-
-Usa el botón **Fork** en GitHub. Esto crea tu propia copia del repo donde podrás configurar tus secrets y ejecutar los workflows.
+**1. Haz fork** de este repositorio.
 
 **2. Clona tu fork**
 
@@ -70,72 +69,90 @@ npm install -g @jelou/cli
 jelou login
 ```
 
-El CLI te pedirá tu token de acceso personal. Consulta la [documentación oficial de Jelou Functions](https://docs.jelou.ai/guides/functions/autenticacion) para saber cómo obtenerlo según tu tipo de cuenta.
-
-**4. Inicializa tu propia Function**
-
-Crea la Function en tu Company y genera tu `jelou.json` local (gitignoreado — no se commitea):
+**4. Inicializa tu Function** (en tu Company; `jelou.json` no se commitea):
 
 ```bash
 jelou functions init --slug github-demo --mode create
 ```
 
-Si ya tienes una Function con ese slug en tu Company:
+Si ya existe una Function con ese slug:
 
 ```bash
 jelou functions init --slug github-demo --mode link
 ```
 
-A partir de este punto puedes desarrollar, probar y desplegar de forma independiente.
+## Política vigente
+
+En `index.ts`, arriba del archivo:
+
+| Constante | Valor | Significado |
+|-----------|-------|-------------|
+| `MAX_AMOUNT` | `150` | Tope del microcrédito (USD) |
+| `MIN_MONTHS_AS_CLIENT` | `3` | Antigüedad mínima |
+| `MAX_DAYS_IN_ARREARS` | `15` | Mora máxima permitida |
+| (implícito) | un crédito | Si `hasActiveLoan` es `true`, se rechaza |
+
+Cualquier regla que falle → `rejected` y la lista `reasons`. Si todas pasan → `approved`.
 
 ## Ejecución local
-
-Inicia el servidor de desarrollo con hot reload:
 
 ```bash
 jelou functions dev
 ```
 
-El servidor queda disponible en `http://localhost:3000`.
+Queda en `http://localhost:3000`.
 
 ## Pruebas
 
-### Caso exitoso
+### Aprobado
 
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{"orderId": "ORD-001"}'
+  -d '{"amount":120,"monthsAsClient":8,"hasActiveLoan":false,"daysInArrears":0}'
 ```
-
-Respuesta esperada (`200 OK`):
 
 ```json
 {
-  "orderId": "ORD-001",
-  "status": "approved",
-  "updatedAt": "2026-07-27T16:40:20.491Z"
+  "decision": "approved",
+  "reasons": ["Cumple la política vigente"],
+  "policy": {
+    "maxAmount": 150,
+    "minMonthsAsClient": 3,
+    "maxDaysInArrears": 15
+  }
 }
 ```
 
-### Validación: `orderId` vacío
+### Rechazado: el monto supera el tope
 
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{"orderId": ""}'
+  -d '{"amount":180,"monthsAsClient":8,"hasActiveLoan":false,"daysInArrears":0}'
 ```
-
-Respuesta esperada (`400 Bad Request`):
 
 ```json
 {
-  "error": "Validation failed",
-  "details": [{ "path": ["orderId"], "message": "String must contain at least 1 character(s)", "code": "too_small" }]
+  "decision": "rejected",
+  "reasons": ["El monto supera el tope de $150"],
+  "policy": {
+    "maxAmount": 150,
+    "minMonthsAsClient": 3,
+    "maxDaysInArrears": 15
+  }
 }
 ```
 
-### Validación: sin `orderId`
+### Rechazado: ya tiene un crédito
+
+```bash
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{"amount":80,"monthsAsClient":12,"hasActiveLoan":true,"daysInArrears":0}'
+```
+
+### Validación: `amount` faltante
 
 ```bash
 curl -X POST http://localhost:3000 \
@@ -143,59 +160,63 @@ curl -X POST http://localhost:3000 \
   -d '{}'
 ```
 
-Respuesta esperada (`400 Bad Request`):
+Respuesta esperada: `400 Bad Request` de Zod.
 
-```json
-{
-  "error": "Validation failed",
-  "details": [{ "path": ["orderId"], "message": "Required", "code": "invalid_type" }]
-}
-```
+## El cambio que se publica
 
-## Despliegue manual
+1. En `index.ts`, cambia `MAX_AMOUNT` de `150` a `200`.
+2. Commit en tu fork.
+3. **Actions → Deploy to Jelou Functions → Run workflow**.
+4. El `curl` de `$180` pasa de `rejected` a `approved`.
 
-> Requiere haber completado el [Uso como plantilla](#uso-como-plantilla).
+Eso es lo que GitHub aporta: la política queda versionada y se publica con un clic. El AI Agent no se reentrena.
 
-Para previsualizar qué se subiría sin hacer el deploy:
+## Despliegue manual (CLI)
 
 ```bash
 jelou functions deploy --dry-run
-```
-
-Para desplegar a producción:
-
-```bash
 jelou functions deploy
 ```
 
+GitHub Actions ejecuta el mismo CLI en un runner.
+
 ## Despliegue con GitHub Actions
 
-El workflow en `.github/workflows/deploy.yml` se ejecuta **únicamente de forma manual** desde la pestaña Actions de tu fork (`Run workflow`). No hay trigger automático por push.
+El workflow (`.github/workflows/deploy.yml`) solo corre con **Run workflow**. No se dispara en cada push.
 
-### Configuración (una sola vez, en tu fork)
+En **tu fork**:
 
-1. Obtén tu token de acceso personal de Jelou (`jfn_pat_...`). Consulta la [documentación oficial](https://docs.jelou.ai/guides/functions/autenticacion) — el proceso varía según el tipo de cuenta.
-2. En tu fork en GitHub, ve a:
-   `Settings → Secrets and variables → Actions → New repository secret`
-3. Crea el secret:
+1. API key del CLI en [apps.jelou.ai/settings/api-keys](https://apps.jelou.ai/settings/api-keys).
+2. **Settings → Secrets and variables → Actions → New repository secret**
    - **Name:** `JELOU_TOKEN`
-   - **Value:** tu token de Jelou
+   - **Value:** esa API key
 
-### Cómo ejecutar el workflow
+Luego: **Actions → Deploy to Jelou Functions → Run workflow**.
 
-1. Ve a la pestaña **Actions** de tu fork.
-2. Selecciona **Deploy to Jelou Functions**.
-3. Haz clic en **Run workflow → Run workflow**.
+## Usarla en un AI Agent
 
-El workflow copia la plantilla, crea o enlaza la Function en la Company asociada a tu token, y despliega.
+Después del deploy, en Brain Studio:
 
-## Estructura del proyecto
+**AI Agent → Tools → Servidores MCP externos**
+
+| Campo | Valor |
+|-------|-------|
+| URL | `https://github-demo.fn.jelou.ai/mcp` |
+| Header | `Authorization` = `Bearer sk_...` |
+
+La API key de invocación se crea en [apps.jelou.ai](https://apps.jelou.ai) (configuración de la app). No uses `JELOU_TOKEN` para llamar el endpoint.
+
+Guía: [Functions → Brain Studio](https://docs.jelou.ai/guides/functions/brain).
+
+El Agent pregunta monto y datos al cliente. Esta Function aplica la política.
+
+## Estructura
 
 ```
-├── index.ts            # Entrypoint de la función
-├── jelou.example.json  # Plantilla de configuración (commitada)
-├── jelou.json          # Configuración local con tu Function ID (gitignoreada)
-├── deno.json           # Import map para @jelou/functions
-├── .env                # Variables locales para dev (gitignoreada)
-└── README.md           # Este archivo
+├── index.ts                 # Política + handler
+├── jelou.example.json       # Plantilla (commitada)
+├── jelou.json               # Function ID local (gitignore)
+├── deno.json
+├── .github/workflows/deploy.yml
+└── README.md
 ```
