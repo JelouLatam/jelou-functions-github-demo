@@ -2,9 +2,11 @@
 
 Demostración de una **Jelou Function** cuyo código vive en GitHub y se publica con un clic (**Run workflow**).
 
-La Function aplica una **política de elegibilidad de microcrédito**: recibe monto, antigüedad, si ya hay un crédito y días de mora, y responde `approved` o `rejected`. No es un buró ni un motor de riesgo. Es la regla de negocio, fuera de la cabeza del AI Agent.
+La Function aplica una **política de elegibilidad de microcrédito**: recibe el monto pedido, los datos del cliente ya consultados y el resultado del screening, y responde `approved` o `rejected` con el monto a desembolsar. No es un buró ni un motor de riesgo. Es la regla de negocio, fuera de la cabeza del AI Agent.
 
-El AI Agent conversa y junta los datos. Esta Function decide. Si Riesgo cambia un umbral, se edita una constante, se publica, y el bot ya usa la política nueva.
+La Function **no consulta nada**. El flujo trae los hechos —historial por DNI, listas negras— y se los pasa ya resueltos. Eso la mantiene determinista: el mismo input siempre da el mismo output, y se prueba entera con `curl` sin credenciales ni datos de producción.
+
+El AI Agent conversa y pide solo lo que la persona sabe de memoria: su DNI, cuánto necesita y la cuenta de destino. Esta Function decide. Si Riesgo cambia un umbral, se edita una constante, se publica, y el bot ya usa la política nueva.
 
 > **Este repositorio es una plantilla.** No existe un deploy oficial. Cada developer hace fork, conecta su propia cuenta de Jelou y despliega en su propia Company.
 
@@ -88,11 +90,14 @@ En `index.ts`, arriba del archivo:
 | Constante | Valor | Significado |
 |-----------|-------|-------------|
 | `MAX_AMOUNT` | `150` | Tope del microcrédito (USD) |
-| `MIN_MONTHS_AS_CLIENT` | `3` | Antigüedad mínima |
-| `MAX_DAYS_IN_ARREARS` | `15` | Mora máxima permitida |
+| `MIN_MONTHS` | `3` | Antigüedad mínima como cliente |
+| `MAX_MORA` | `15` | Mora máxima permitida, en días |
 | (implícito) | un crédito | Si `hasActiveLoan` es `true`, se rechaza |
+| (implícito) | lista negra | Si `onBlocklist` es `true`, se rechaza |
 
-Cualquier regla que falle → `rejected` y la lista `reasons`. Si todas pasan → `approved`.
+Cualquier regla que falle → `rejected`, `approvedAmount` en `0` y la lista `reasons`. Si todas pasan → `approved`, `approvedAmount` con el monto pedido y `nextStep` en `biometrics`.
+
+Estar en lista negra es un **hecho** que trae el flujo. Que ese hecho rechace la solicitud es **política**, y por eso vive acá.
 
 ## Ejecución local
 
@@ -104,23 +109,31 @@ Queda en `http://localhost:3000`.
 
 ## Pruebas
 
+El payload viene armado como lo armaría el flujo: el monto pedido por un lado, los datos que trajo la consulta por otro.
+
 ### Aprobado
 
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{"amount":120,"monthsAsClient":8,"hasActiveLoan":false,"daysInArrears":0}'
+  -d '{
+    "requestedAmount": 120,
+    "client": {
+      "documentId": "0102938475",
+      "monthsAsClient": 8,
+      "hasActiveLoan": false,
+      "daysInArrears": 0
+    },
+    "screening": { "onBlocklist": false }
+  }'
 ```
 
 ```json
 {
   "decision": "approved",
+  "approvedAmount": 120,
   "reasons": ["Cumple la política vigente"],
-  "policy": {
-    "maxAmount": 150,
-    "minMonthsAsClient": 3,
-    "maxDaysInArrears": 15
-  }
+  "nextStep": "biometrics"
 }
 ```
 
@@ -129,35 +142,50 @@ curl -X POST http://localhost:3000 \
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{"amount":180,"monthsAsClient":8,"hasActiveLoan":false,"daysInArrears":0}'
+  -d '{
+    "requestedAmount": 180,
+    "client": {
+      "documentId": "0102938475",
+      "monthsAsClient": 8,
+      "hasActiveLoan": false,
+      "daysInArrears": 0
+    },
+    "screening": { "onBlocklist": false }
+  }'
 ```
 
 ```json
 {
   "decision": "rejected",
+  "approvedAmount": 0,
   "reasons": ["El monto supera el tope de $150"],
-  "policy": {
-    "maxAmount": 150,
-    "minMonthsAsClient": 3,
-    "maxDaysInArrears": 15
-  }
+  "nextStep": "none"
 }
 ```
 
-### Rechazado: ya tiene un crédito
+### Rechazado: está en lista negra
 
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{"amount":80,"monthsAsClient":12,"hasActiveLoan":true,"daysInArrears":0}'
+  -d '{
+    "requestedAmount": 80,
+    "client": {
+      "documentId": "0102938475",
+      "monthsAsClient": 12,
+      "hasActiveLoan": false,
+      "daysInArrears": 0
+    },
+    "screening": { "onBlocklist": true }
+  }'
 ```
 
-### Validación: `amount` faltante
+### Validación: falta `client`
 
 ```bash
 curl -X POST http://localhost:3000 \
   -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{"requestedAmount": 100}'
 ```
 
 Respuesta esperada: `400 Bad Request` de Zod.
@@ -208,7 +236,7 @@ La API key de invocación se crea en [apps.jelou.ai](https://apps.jelou.ai) (con
 
 Guía: [Functions → Brain Studio](https://docs.jelou.ai/guides/functions/brain).
 
-El Agent pregunta monto y datos al cliente. Esta Function aplica la política.
+El Agent pide DNI, monto y cuenta de destino, y busca el historial con la [tool nativa de bases de datos](https://docs.jelou.ai/guides/agentes-ia/tools-nativas) o el [nodo Datum](https://docs.jelou.ai/guides/nodos/datum). Esta Function aplica la política. Si la respuesta trae `nextStep` en `biometrics`, lo que sigue es el [nodo Biometría](https://docs.jelou.ai/guides/integraciones/identidad/biometria-webview), y recién después el desembolso.
 
 ## Estructura
 
